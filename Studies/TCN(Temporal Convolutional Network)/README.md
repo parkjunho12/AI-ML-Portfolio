@@ -1,6 +1,6 @@
 # 📚 TCN (Temporal Convolutional Network) Study Notes
 
-# 1. Today's Goals 🎯
+# 1. Goals 🎯
 
 ---
 
