@@ -1,4 +1,16 @@
+import torch
 import torch.nn as nn
+from typing import Tuple, List
+from torch.nn.utils.parametrizations import weight_norm
+import snntorch as snn
+from snntorch import spikeplot as splt
+from snntorch import utils
+import snntorch.functional as SF
+import snntorch.spikegen as spikegen
+from snntorch import surrogate
+
+spike_grad = surrogate.fast_sigmoid(slope=25)
+beta = 0.5
 
 class Chomp1d(nn.Module):
     """
@@ -11,6 +23,7 @@ class Chomp1d(nn.Module):
     def forward(self, x):
         return x[:, :, :-self.chomp_size].contiguous() if self.chomp_size > 0 else x
 
+
 class TemporalBlock(nn.Module):
     """
     Temporal Block for TCN implementation
@@ -22,7 +35,9 @@ class TemporalBlock(nn.Module):
         self.conv1 = weight_norm(nn.Conv1d(n_inputs, n_outputs, kernel_size,
                                                    stride=stride, padding=padding, 
                                                    dilation=dilation))
+
         self.chomp1 = Chomp1d(padding)
+        self.spike1 = snn.Leaky(beta=beta, spike_grad=spike_grad)
         self.relu1 = nn.ReLU()
         self.dropout1 = nn.Dropout(dropout)
 
@@ -30,12 +45,10 @@ class TemporalBlock(nn.Module):
                                                    stride=stride, padding=padding, 
                                                    dilation=dilation))
         self.chomp2 = Chomp1d(padding)
+        self.spike2 = snn.Leaky(beta=beta, spike_grad=spike_grad)
         self.relu2 = nn.ReLU()
         self.dropout2 = nn.Dropout(dropout)
 
-        self.net = nn.Sequential(self.conv1, self.chomp1, self.relu1, self.dropout1,
-                                self.conv2, self.chomp2, self.relu2, self.dropout2)
-        
         self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
         self.relu = nn.ReLU()
         self.init_weights()
@@ -47,9 +60,24 @@ class TemporalBlock(nn.Module):
             self.downsample.weight.data.normal_(0, 0.01)
 
     def forward(self, x):
-        out = self.net(x)
+        mem1 = self.spike1.init_leaky()
+        mem2 = self.spike2.init_leaky()
+
+        x1 = self.conv1(x)
+        x1 = self.chomp1(x1)
+        mem1, spk1 = self.spike1(x1, mem1)
+        x1 = self.relu1(spk1)
+        x1 = self.dropout1(x1)
+
+        x2 = self.conv2(x1)
+        x2 = self.chomp1(x2)
+        mem2, spk2 = self.spike2(x2, mem2)
+        x2 = self.relu1(spk2)
+        out = self.dropout1(x2)
+
         res = x if self.downsample is None else self.downsample(x)
         return self.relu(out + res)
+
 
 class TCN(nn.Module):
     """
@@ -88,3 +116,6 @@ class TCN(nn.Module):
         
         # Classification
         return self.classifier(y)
+
+
+__all__ = ["Chomp1d", "TemporalBlock", "TCN"]
