@@ -112,3 +112,19 @@ class TCN(nn.Module):
         out=out.reshape([batch_size,y_temp.size()[1],-1]).transpose(1,2)
        
         return out
+
+# Dil=[ [1,1], [2,2], [4,4], [8,8], [8,8], [8,8],  [16,16] ]
+# Dil=[ [1,1], [2,2], [4,4], [8,8], [16,16], [16,16],  [32,32] ]
+# #K_S=[ [7,7], [7,7], [7,7], [7,7], [7,7], [7,7], [7,7] ]
+# K_S=[ [4,4], [4,4], [4,4], [4,4], [4,4], [4,4], [4,4] ]
+# Str=[ [1,1] ]*7
+
+# print( np.sum((np.array(K_S)-1)*np.array(Dil)) )
+# Receptive_F=np.sum((np.array(K_S)-1)*np.array(Dil))
+
+# F_Ns=torch.tensor([32,5])
+# dropout_F=0.1
+# dropout_cnn=0.2
+
+# tcn=TCN(N_C, input_size, output_size, num_channels, K_S, Dil, Str, \
+#         dropout=dropout_cnn, F_Ns=F_Ns, dropout_F=dropout_F,Receptive_F=Receptive_F )
