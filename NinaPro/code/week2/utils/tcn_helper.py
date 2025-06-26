@@ -70,7 +70,7 @@ class TemporalBlock(nn.Module):
         x1 = self.dropout1(x1)
 
         x2 = self.conv2(x1)
-        x2 = self.chomp1(x2)
+        x2 = self.chomp2(x2)
         mem2, spk2 = self.spike2(x2, mem2)
         x2 = self.relu1(spk2)
         out = self.dropout1(x2)
