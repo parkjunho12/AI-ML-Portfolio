@@ -73,7 +73,7 @@ class TemporalBlock(nn.Module):
         x2 = self.chomp2(x2)
         mem2, spk2 = self.spike2(x2, mem2)
         x2 = self.relu1(spk2)
-        out = self.dropout1(x2)
+        out = self.dropout2(x2)
 
         res = x if self.downsample is None else self.downsample(x)
         return self.relu(out + res)
