@@ -6,7 +6,6 @@ import snntorch as snn
 from snntorch import spikeplot as splt
 from snntorch import utils
 import snntorch.functional as SF
-import snntorch.spikegen as spikegen
 from snntorch import surrogate
 
 spike_grad = surrogate.fast_sigmoid(slope=25)
@@ -105,7 +104,8 @@ class TCN(nn.Module):
     def forward(self, x):
         # x shape: (batch_size, seq_len, num_features)
         # TCN expects: (batch_size, num_features, seq_len)
-        x = x.unsqueeze(2) 
+        # x = x.unsqueeze(2) 
+        x = x.permute(0, 2, 1)   
         
         # Pass through TCN
         y = self.network(x)
