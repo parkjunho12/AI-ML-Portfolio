@@ -9,9 +9,6 @@ import snntorch.functional as SF
 import snntorch.spikegen as spikegen
 from snntorch import surrogate
 
-spike_grad = surrogate.fast_sigmoid(slope=25)
-beta = 0.5
-
 class Chomp1d(nn.Module):
     """
     Remove extra padding from the right side
@@ -29,9 +26,9 @@ class TemporalBlock(nn.Module):
     Temporal Block for TCN implementation
     """
     def __init__(self, n_inputs: int, n_outputs: int, kernel_size: int, stride: int, 
-                 dilation: int, padding: int, dropout: float = 0.2):
+                 dilation: int, padding: int, dropout: float = 0.2, beta: float = 0.5, slope: int = 25):
         super(TemporalBlock, self).__init__()
-        
+        spike_grad = surrogate.fast_sigmoid(slope=slope)
         self.conv1 = weight_norm(nn.Conv1d(n_inputs, n_outputs, kernel_size,
                                                    stride=stride, padding=padding, 
                                                    dilation=dilation))
@@ -76,7 +73,7 @@ class TCN(nn.Module):
     Temporal Convolutional Network for NinaPro dataset
     """
     def __init__(self, num_inputs: int, num_channels: List[int], num_classes: int, 
-                 kernel_size: int = 2, dropout: float = 0.2, timestamp=2):
+                 kernel_size: int = 2, dropout: float = 0.2, timestamp=2, beta=0.5, slope=25):
         super(TCN, self).__init__()
         self.timesteps = timestamp
 
@@ -90,7 +87,7 @@ class TCN(nn.Module):
             self.blocks.append(TemporalBlock(in_channels, out_channels, kernel_size, 
                                    stride=1, dilation=dilation_size,
                                    padding=(kernel_size-1) * dilation_size, 
-                                   dropout=dropout))
+                                   dropout=dropout, beta=0.5, slope=slope))
         self.classifier = nn.Linear(num_channels[-1], num_classes)
         
     def forward(self, x):
