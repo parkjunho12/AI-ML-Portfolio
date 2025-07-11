@@ -76,7 +76,7 @@ class TCN(nn.Module):
     Temporal Convolutional Network for NinaPro dataset
     """
     def __init__(self, num_inputs: int, num_channels: List[int], num_classes: int, 
-                 kernel_size: int = 2, dropout: float = 0.2, timestamp=20):
+                 kernel_size: int = 2, dropout: float = 0.2, timestamp=2):
         super(TCN, self).__init__()
         self.timesteps = timestamp
 
@@ -95,7 +95,6 @@ class TCN(nn.Module):
         
     def forward(self, x):
         # x shape: (batch_size, seq_len, num_features)
-        # TCN expects: (batch_size, num_features, seq_len)
         mem_states = [(blk.spike1.init_leaky(), blk.spike2.init_leaky()) for blk in self.blocks]
         x = x.unsqueeze(2) 
 
@@ -111,15 +110,6 @@ class TCN(nn.Module):
             out_spikes += self.classifier(pooled)
 
         return out_spikes / self.timesteps
-        
-        # # Pass through TCN
-        # y = self.network(x)
-        
-        # # Global average pooling
-        # y = torch.mean(y, dim=2)  # (batch_size, num_channels[-1])
-        
-        # # Classification
-        # return self.classifier(y)
 
 
 __all__ = ["Chomp1d", "TemporalBlock", "TCN"]
