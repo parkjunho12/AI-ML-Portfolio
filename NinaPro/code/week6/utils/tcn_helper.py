@@ -97,7 +97,7 @@ class TCN(nn.Module):
         # x shape: (batch_size, seq_len, num_features)
         # TCN expects: (batch_size, num_features, seq_len)
         mem_states = [(blk.spike1.init_leaky(), blk.spike2.init_leaky()) for blk in self.blocks]
-        x = x.unsqueeze(2) 
+        x = x.permute(0, 2, 1)
 
         out_spikes = 0
         for t in range(self.timesteps):
