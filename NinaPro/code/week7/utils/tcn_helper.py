@@ -160,7 +160,7 @@ class TCNGen(nn.Module):
     Temporal Convolutional Network for NinaPro dataset
     """
     def __init__(self, num_inputs: int, num_channels: List[int], num_classes: int, 
-                 kernel_size: int = 2, dropout: float = 0.2, timestamp=20):
+                 kernel_size: int = 2, dropout: float = 0.2, timestamp=10):
         super(TCNGen, self).__init__()
         self.timesteps = timestamp
 
@@ -196,5 +196,46 @@ class TCNGen(nn.Module):
 
         return out_spikes / self.timesteps
 
+class TCNGen2(nn.Module):
+    """
+    Temporal Convolutional Network for NinaPro dataset
+    """
+    def __init__(self, num_inputs: int, num_channels: List[int], num_classes: int, 
+                 kernel_size: int = 2, dropout: float = 0.2, timestamp=10):
+        super(TCNGen2, self).__init__()
+        self.timesteps = timestamp
 
-__all__ = ["Chomp1d", "TemporalBlock", "TCN", "SNNOnlyModel", "TCNGen"]
+        self.blocks = nn.ModuleList()
+        num_levels = len(num_channels)
+        
+        for i in range(num_levels):
+            dilation_size = 2 ** i
+            in_channels = num_inputs if i == 0 else num_channels[i-1]
+            out_channels = num_channels[i]
+            self.blocks.append(TemporalBlock(in_channels, out_channels, kernel_size, 
+                                   stride=1, dilation=dilation_size,
+                                   padding=(kernel_size-1) * dilation_size, 
+                                   dropout=dropout))
+        self.classifier = nn.Linear(num_channels[-1], num_classes)
+        
+    def forward(self, x):
+        # x shape: (batch_size, seq_len, num_features)
+        # TCN expects: (batch_size, num_features, seq_len)
+        x = x.permute(0, 1, 3, 2)
+
+        out_spikes = 0
+        for t in range(self.timesteps):
+            cur_input = x[t]  # optional: use rate-coded spikes or input[t]
+            mem_states = [(blk.spike1.init_leaky(), blk.spike2.init_leaky()) for blk in self.blocks]
+            for i, block in enumerate(self.blocks):
+                mem1, mem2 = mem_states[i]
+                cur_input, mem1, mem2 = block(cur_input, mem1, mem2)
+                mem_states[i] = (mem1, mem2)
+
+            pooled = torch.mean(cur_input, dim=2)
+            out_spikes += self.classifier(pooled)
+
+        return out_spikes / self.timesteps
+
+
+__all__ = ["Chomp1d", "TemporalBlock", "TCN", "SNNOnlyModel", "TCNGen", "TCNGen2"]
