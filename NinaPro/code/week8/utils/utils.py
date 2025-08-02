@@ -171,52 +171,126 @@ class TCN_RMS_Only(nn.Module):
         return self.classifier(y)
 
 class SNN_Only(nn.Module):
-    def __init__(self, input_size: int, hidden_sizes: List[int], num_classes: int, beta: float = 0.9):
-        """
-        SNN-only classifier using snntorch Leaky spiking neurons
-
-        Args:
-            input_size: Number of input features (e.g., number of EMG channels)
-            hidden_sizes: List of hidden layer sizes (e.g., [128, 64])
-            num_classes: Number of output gesture classes
-            beta: Membrane time decay constant (for leaky neurons)
-        """
+    def __init__(self, input_size: int, hidden_sizes: List[int], num_classes: int):
         super(SNN_Only, self).__init__()
 
+        self.beta = 0.5
+        self.spike_grad = surrogate.fast_sigmoid()
+
+        self.fc1 = nn.Linear(input_size, hidden_sizes[0])
+        self.lif1 = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
+
+        self.fc2 = nn.Linear(hidden_sizes[0], hidden_sizes[1])
+        self.lif2 = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
+
+        self.fc_out = nn.Linear(hidden_sizes[1], num_classes)
+        self.lif_out = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
+
+    def forward(self, x, num_steps=20):
+        mem1 = self.lif1.init_leaky()
+        mem2 = self.lif2.init_leaky()
+        mem_out = self.lif_out.init_leaky()
+
+        spk_out_rec = []
+
+        for _ in range(num_steps):
+            cur1 = self.fc1(x)
+            spk1, mem1 = self.lif1(cur1, mem1)
+
+            cur2 = self.fc2(spk1)
+            spk2, mem2 = self.lif2(cur2, mem2)
+
+            cur_out = self.fc_out(spk2)
+            spk_out, mem_out = self.lif_out(cur_out, mem_out)
+
+            spk_out_rec.append(spk_out)
+
+        spk_out_rec = torch.stack(spk_out_rec, dim=0)
+        out = spk_out_rec.sum(dim=0)
+
+        return out
+
+class SNN_beta_Only(nn.Module):
+    def __init__(self, input_size: int, hidden_sizes: List[int], num_classes: int, beta: float):
+        super(SNN_beta_Only, self).__init__()
+
         self.beta = beta
-        self.seq = nn.ModuleList()
-        in_dim = input_size
+        self.spike_grad = surrogate.fast_sigmoid()
 
-        # Hidden layers with spiking neurons
-        for h in hidden_sizes:
-            self.seq.append(nn.Linear(in_dim, h))
-            self.seq.append(snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid()))
-            in_dim = h
+        self.fc1 = nn.Linear(input_size, hidden_sizes[0])
+        self.lif1 = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
 
-        # Final classification layer (non-spiking)
-        self.out = nn.Linear(in_dim, num_classes)
+        self.fc2 = nn.Linear(hidden_sizes[0], hidden_sizes[1])
+        self.lif2 = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
 
-    def forward(self, x: torch.Tensor, num_steps: int = 20):
-        """
-        x: shape (batch, features)
-        num_steps: number of simulation time steps (temporal dimension)
-        """
-        mem = []
-        spk = []
-        cur = x
+        self.fc_out = nn.Linear(hidden_sizes[1], num_classes)
+        self.lif_out = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
 
-        # Accumulate spikes over time
-        spk_sum = 0
-        for step in range(num_steps):
-            for i, layer in enumerate(self.seq):
-                if isinstance(layer, snn.Leaky):
-                    cur, _ = layer(cur)
-                else:
-                    cur = layer(cur)
-            spk_sum += cur
+    def forward(self, x, num_steps=20):
+        mem1 = self.lif1.init_leaky()
+        mem2 = self.lif2.init_leaky()
+        mem_out = self.lif_out.init_leaky()
 
-        out = self.out(spk_sum / num_steps)  # average membrane potential
+        spk_out_rec = []
+
+        for _ in range(num_steps):
+            cur1 = self.fc1(x)
+            spk1, mem1 = self.lif1(cur1, mem1)
+
+            cur2 = self.fc2(spk1)
+            spk2, mem2 = self.lif2(cur2, mem2)
+
+            cur_out = self.fc_out(spk2)
+            spk_out, mem_out = self.lif_out(cur_out, mem_out)
+
+            spk_out_rec.append(spk_out)
+
+        spk_out_rec = torch.stack(spk_out_rec, dim=0)
+        out = spk_out_rec.sum(dim=0)
+
         return out
         
 
-__all__ = ["MLPClassifier", "LSTMClassifier", "TemporalBlock", "TCN_Only", "TCN_RMS_Only", "SNN_Only"]
+class SNN_beta_encode(nn.Module):
+    def __init__(self, input_size: int, hidden_sizes: List[int], num_classes: int, beta: float):
+        super(SNN_beta_encode, self).__init__()
+
+        self.beta = beta
+        self.spike_grad = surrogate.fast_sigmoid()
+
+        self.fc1 = nn.Linear(input_size, hidden_sizes[0])
+        self.lif1 = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
+
+        self.fc2 = nn.Linear(hidden_sizes[0], hidden_sizes[1])
+        self.lif2 = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
+
+        self.fc_out = nn.Linear(hidden_sizes[1], num_classes)
+        self.lif_out = snn.Leaky(beta=self.beta, spike_grad=self.spike_grad)
+
+    def forward(self, x, num_steps=20):
+        x_seq = rate_encode(x, num_steps)  # (num_steps, batch, input_size)
+
+        mem1 = self.lif1.init_leaky()
+        mem2 = self.lif2.init_leaky()
+        mem_out = self.lif_out.init_leaky()
+
+        for step in range(num_steps):
+            cur1 = self.fc1(x_seq[step])
+            spk1, mem1 = self.lif1(cur1, mem1)
+
+            cur2 = self.fc2(spk1)
+            spk2, mem2 = self.lif2(cur2, mem2)
+
+            cur_out = self.fc_out(spk2)
+            spk_out, mem_out = self.lif_out(cur_out, mem_out)
+
+        return mem_out  # final potential for classification
+
+def rate_encode(x, num_steps):
+    # x shape: (batch, features)
+    x = x.unsqueeze(0).repeat(num_steps, 1, 1)  # replicate over time
+    rand_threshold = torch.rand_like(x)
+    return (x > rand_threshold).float()
+
+
+__all__ = ["MLPClassifier", "LSTMClassifier", "TemporalBlock", "TCN_Only", "TCN_RMS_Only", "SNN_Only", "SNN_beta_Only", "SNN_beta_encode"]
